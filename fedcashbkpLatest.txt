@@ -1,0 +1,258 @@
+package edu.uic.kdurge2.cs478.fedcash;
+
+import android.app.IntentService;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
+import android.os.RemoteException;
+import android.support.v7.app.AppCompatActivity;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.RadioGroup;
+
+import edu.uic.kdurge2.cs478.treasuryCommon.IRemoteService;
+
+import android.content.SharedPreferences;
+
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int QUERY_MOVE_1 = 1;
+    private static final int QUERY_MOVE_2 = 2;
+
+    private static final int QUERY_MOVE_3 = 3;
+
+
+
+    private Button callBtn;
+    private RadioGroup queryGroup;
+    private Intent serviceIntent;
+    private EditText inpYear;
+
+    private List<Integer> query1List;
+    private List<Integer> query2List;
+    private int yearlyAvg;
+
+    private int countQuery1 = 0;
+    private int countQuery2 = 0;
+    private int countQuery3 = 0;
+
+    private HashMap<String, ArrayList<String>> callResultMap = new HashMap<String, ArrayList<String>>();
+
+    Handler workerThreadHandler;
+
+    private IRemoteService mtreasuryServ;
+    private boolean mIsBound = false;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+
+
+        callBtn =(Button) findViewById(R.id.callService);
+        queryGroup = (RadioGroup) findViewById(R.id.radioGroup);
+        inpYear = (EditText) findViewById(R.id.yearInput);
+
+        queryGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(RadioGroup radioGroup, int i) {
+
+                switch (i){
+
+                    case R.id.query1:
+                        Message message1= workerThreadHandler.obtainMessage(QUERY_MOVE_1);
+                        workerThreadHandler.sendMessage(message1);
+                        Log.i("","%%%%%%%%calling first query%%%%%%%%");
+                        break;
+                    case R.id.query2:
+                        Message message2= workerThreadHandler.obtainMessage(QUERY_MOVE_2);
+                        workerThreadHandler.sendMessage(message2);
+                        break;
+                    case R.id.query3:
+                        Message message3= workerThreadHandler.obtainMessage(QUERY_MOVE_3);
+                        workerThreadHandler.sendMessage(message3);
+                        break;
+
+                }
+
+            }
+        });
+
+
+        Thread threadWorker = new Thread(new Runnable() {
+
+            @Override
+            public  void run() {
+                Looper.prepare();
+
+                workerThreadHandler = new Handler(){
+
+                    @Override
+                    public void handleMessage(Message msg) {
+
+                        Message message;
+                        switch (msg.what){
+
+                            case QUERY_MOVE_1:
+
+                                try {
+
+                                    countQuery1 ++;
+                                    // Log.i("", "CALIING FIRST QUERY");
+                                    query1List = mtreasuryServ.monthlyCash(Integer.parseInt(inpYear.getText().toString()));
+                                    String key1 = "First Query called " + Integer.toString(countQuery1) + "time";
+                                    ArrayList<String> resultQuery = new ArrayList<String>();
+                                    resultQuery = convertToStringArray(query1List);
+                                    callResultMap.put(key1,resultQuery);
+
+                                } catch (RemoteException e) {
+                                    Log.i("","Exception in worker thread 1 while requesting first query");
+                                }
+
+                                Log.i("","queryList********************" + query1List);
+                                break;
+                            case QUERY_MOVE_2:
+
+
+                                break;
+                            case QUERY_MOVE_3:
+
+                                countQuery3 ++;
+                                try {
+                                    yearlyAvg = mtreasuryServ.yearlyAvg(Integer.parseInt(inpYear.getText().toString()));
+                                    String key3 = "Third Query called" + Integer.toString(countQuery3) + "time";
+                                    ArrayList<String> resultQuery3 = new ArrayList<String>();
+                                    resultQuery3.add(Integer.toString(yearlyAvg));
+                                    callResultMap.put(key3,resultQuery3);
+
+                                }
+                                catch (Exception e){
+                                    e.printStackTrace();
+                                }
+
+                                Log.i("","yearlyavg********************" + yearlyAvg);
+
+
+                                break;
+
+                        }
+
+                    }
+
+                };
+                Looper.loop();
+            }
+
+
+        });
+        threadWorker.start();
+
+        callBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+
+                Intent i = new Intent(MainActivity.this,DisplayFragments.class);
+                i.putExtra("mapCallValuePairs",callResultMap );
+                startActivity(i);
+            }
+        });
+
+    }
+
+    public ArrayList<String> convertToStringArray(List<Integer> resultQuery){
+
+
+
+        ArrayList<String> newList = new ArrayList<String>(resultQuery.size());
+        for (Integer myInt : query1List) {
+            newList.add(String.valueOf(myInt));
+        }
+
+        return newList;
+    }
+
+    private ServiceConnection mConnection  = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+
+            Log.i("","&&&&&&&&&&&&&&&&&&ESTABLISHED CONNECTION!!$$$$$$$$$$$$$$$$$$$$");
+
+            mtreasuryServ = IRemoteService.Stub.asInterface(iBinder);
+
+            mIsBound = true;
+
+
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mtreasuryServ = null;
+
+            mIsBound = false;
+
+        }
+    };
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        if(!mIsBound){
+
+            boolean b = false;
+            serviceIntent = new Intent(IRemoteService.class.getName());
+
+
+            ResolveInfo info = getPackageManager().resolveService(serviceIntent, Context.BIND_AUTO_CREATE);
+
+            serviceIntent.setComponent(new ComponentName(info.serviceInfo.packageName, info.serviceInfo.name));
+
+            b = bindService(serviceIntent, this.mConnection, Context.BIND_AUTO_CREATE);
+            if (b) {
+                Log.i("", "BindService() succeeded!");
+            } else {
+                Log.i("", "BindService() failed!");
+            }
+        }
+
+    }
+
+//    @Override
+//    protected void onPause() {
+//
+//        if (mIsBound) {
+//
+//            unbindService(this.mConnection);
+//
+//        }
+//
+//        super.onPause();
+//    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopService(serviceIntent);
+        unbindService(mConnection);
+    }
+
+
+
+}

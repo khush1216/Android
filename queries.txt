@@ -1,0 +1,16 @@
+SELECT DISTINCT date, "table", "open_today"
+FROM
+t1
+WHERE ("date" > '2016-01-01' AND "date" < '2016-12-31') AND "open_today" IS NOT 0 AND ("date" LIKE "2016-%-01" OR "date" LIKE "2016-%-02" OR "date" LIKE "2016-%-03" OR "date" LIKE "2016-%-04" OR "date" LIKE "2016-%-05") 
+
+
+SELECT DISTINCT date, "table", "open_today"
+FROM
+t1
+WHERE ("date" > '2016-01-01' AND "open_today" IS NOT 0)
+limit 25;
+
+SELECT DISTINCT date, "table", AVG("open_today") AS AVERAGE
+FROM
+t1
+WHERE ("date" > '2016-01-01' AND "date" < '2016-12-31' AND "open_today" IS NOT 0)

@@ -1,0 +1,280 @@
+package edu.uic.kdurge2.cs478.treasuryserv;
+
+import android.app.IntentService;
+import android.app.Service;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Binder;
+import android.os.IBinder;
+import android.os.RemoteException;
+import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import edu.uic.kdurge2.cs478.treasuryCommon.IRemoteService;
+
+/**
+ * Created by Khushbu on 12/2/2017.
+ */
+
+public class TreasuryServe extends Service {
+
+    final String COMMON_QUERY ="http://api.treasury.io/cc7znvq/47d80ae900e04f2/sql/?q=";
+    //URL url = new URL("http://www.android.com/");
+    HttpURLConnection urlConnection = null;
+    BufferedReader reader = null;
+
+
+    List<Integer> tempQuery1 = new ArrayList<Integer>();
+    List<Integer> listIntegers = new ArrayList<Integer>();
+
+    String incomingJsonStr = null;
+    String format = "json";
+    private static final String TAG = "TreasuryServe";
+
+    @Override
+    public IBinder onBind(Intent intent){
+        Log.i("","IN IBINDER SERVICE");
+        return mBinder;
+    }
+
+
+        private final IRemoteService.Stub mBinder = new IRemoteService.Stub() {
+            @Override
+            public List monthlyCash(int inpYear) throws RemoteException {
+                //Log.i("", "IN THE SERVICE NOW !! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+                if(!listIntegers.isEmpty()) {
+                    listIntegers.clear();
+                }
+                String inpYearString = Integer.toString(inpYear);
+
+                //final String query1 = COMMON_QUERY + "SELECT DISTINCT date, \"table\", \"open_today\" FROM t1 WHERE (\"date\" > '2016-01-01' AND \"date\" < '2016-12-31') AND \"open_today\" IS NOT 0 AND (\"date\" LIKE \"2016-%-01\" OR \"date\" LIKE \"2016-%-02\" OR \"date\" LIKE \"2016-%-03\" OR \"date\" LIKE \"2016-%-04\" OR \"date\" LIKE \"2016-%-05\")";
+                final String query1 = COMMON_QUERY + "SELECT DISTINCT date, \"table\", \"open_today\" FROM t1 WHERE (\"date\" > '" + inpYearString + "-01-01' AND \"date\" < '" +inpYearString + "-12-31') AND \"open_today\" IS NOT 0 AND (\"date\" LIKE \"" + inpYearString +"-%-01\" OR \"date\" LIKE \"" + inpYearString + "-%-02\" OR \"date\" LIKE \"" + inpYearString +"-%-03\" OR \"date\" LIKE \"" + inpYearString +"-%-04\" OR \"date\" LIKE \"" + inpYearString+ "-%-05\")";
+
+                try {
+
+                    //Log.i("", "IN THE SERVICE NOW !! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+                    Uri builtUri = Uri.parse(query1);
+                    Log.v(TAG, "Built URI" + builtUri.toString());
+
+                    URL url = new URL(builtUri.toString());
+                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+
+                    urlConnection = (HttpURLConnection) url.openConnection();
+                    urlConnection.setRequestMethod("GET");
+                    urlConnection.connect();
+
+                    InputStream inputStream = urlConnection.getInputStream();
+                    StringBuffer buffer = new StringBuffer();
+                    if (inputStream == null) {
+                        // Nothing to do.
+                        return null;
+                    }
+                    reader = new BufferedReader(new InputStreamReader(inputStream));
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        buffer.append(line + "\n");
+                    }
+
+                 //   Log.i(TAG , "%%%%%%%BUFFER JSON%%%%%%%%%%" + buffer);
+
+                    if (buffer.length() == 0) {
+                        // Stream was empty.  No point in parsing.
+                        return null;
+                    }
+                    incomingJsonStr = buffer.toString();
+
+                    List<String> getValues = new ArrayList<String>();
+                    getValues = returnQuery1List(incomingJsonStr);
+
+                    for(String current:getValues){
+                        listIntegers.add(Integer.parseInt(current));
+                    }
+
+                    Log.i("","%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%" + getValues + "$$$$$$$$$$$$$$$$$$$");
+
+                   // Log.i(TAG, "*****************************" + incomingJsonStr);
+                } catch (IOException e) {
+                    Log.e(TAG, "Error ", e);
+
+                } finally {
+                    if (urlConnection != null) {
+                        urlConnection.disconnect();
+                    }
+
+                    if (reader != null) {
+                        try {
+                            reader.close();
+                        } catch (final IOException e) {
+                            Log.e(TAG, "Error closing stream", e);
+                        }
+                    }
+                }
+                return listIntegers ;
+            }
+
+
+            @Override
+            public List dailyCash(int day, int month, int year, int workingDays) throws RemoteException {
+
+                final String query2 = "SELECT DISTINCT date, \"table\", \"open_today\" FROM t1 WHERE (\"date\" > '2016-01-01' AND \"open_today\" IS NOT 0) limit 25;";
+                return null;
+            }
+
+            @Override
+            public int yearlyAvg(int inpYear) throws RemoteException {
+
+                String inpYearString = Integer.toString(inpYear);
+                //final String query3 = "SELECT DISTINCT date, \"table\", AVG(\"open_today\") AS AVERAGE FROM t1 WHERE (\"date\" > '2016-01-01' AND \"date\" < '2016-12-31' AND \"open_today\" IS NOT 0)";
+                final String query3 = COMMON_QUERY + "SELECT DISTINCT date, \"table\", AVG(\"open_today\") AS AVERAGE FROM t1 WHERE (\"date\" > '" + inpYearString + "-01-01' AND \"date\" < '" + inpYearString +"-12-31' AND \"open_today\" IS NOT 0)";
+                int sendAverage = 0;
+
+                try {
+
+                    //Log.i("", "IN THE SERVICE NOW !! &&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+                    Uri builtUri = Uri.parse(query3);
+                    Log.v(TAG, "Built URI" + builtUri.toString());
+
+                    URL url = new URL(builtUri.toString());
+                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+
+                    urlConnection = (HttpURLConnection) url.openConnection();
+                    urlConnection.setRequestMethod("GET");
+                    urlConnection.connect();
+
+                    InputStream inputStream = urlConnection.getInputStream();
+                    StringBuffer buffer = new StringBuffer();
+                    if (inputStream == null) {
+                        // Nothing to do.
+                        return 0;
+                    }
+                    reader = new BufferedReader(new InputStreamReader(inputStream));
+
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        buffer.append(line + "\n");
+                    }
+
+                    //   Log.i(TAG , "%%%%%%%BUFFER JSON%%%%%%%%%%" + buffer);
+
+                    if (buffer.length() == 0) {
+                        // Stream was empty.  No point in parsing.
+                        return 0;
+                    }
+                    incomingJsonStr = buffer.toString();
+                    sendAverage = yearlyAverage(incomingJsonStr);
+
+                     Log.i(TAG, "*****************************" + incomingJsonStr);
+                } catch (IOException e) {
+                    Log.e(TAG, "Error ", e);
+
+                } finally {
+                    if (urlConnection != null) {
+                        urlConnection.disconnect();
+                    }
+
+                    if (reader != null) {
+                        try {
+                            reader.close();
+                        } catch (final IOException e) {
+                            Log.e(TAG, "Error closing stream", e);
+                        }
+                    }
+                }
+                return sendAverage;
+            }
+        };
+
+    public int yearlyAverage(String incomingJsonStr){
+
+        int yearlyAveg =0;
+
+        try {
+
+            JSONArray mArray;
+            mArray = new JSONArray(incomingJsonStr);
+            JSONObject mJsonObject = mArray.getJSONObject(0);
+
+            String average = mJsonObject.getString("AVERAGE");
+            yearlyAveg = Math.round(Float.parseFloat(average));
+
+        }
+        catch (Exception e){
+            e.printStackTrace();
+        }
+
+        return yearlyAveg;
+
+
+    }
+  public List<String> returnQuery1List(String json){
+
+        List<String> values = new ArrayList<String>();
+
+        JSONArray mArray;
+        Log.i("", "***********I'm here!!!");
+
+
+        try {
+           // Log.i("", "I'm inside try of returnQuery1List!!!");
+            mArray = new JSONArray(json);
+            String date="";
+            String new_date = "";
+            String new_month = "";
+            String month ="";
+
+
+            for (int i = 0; i < mArray.length(); i++) {
+                JSONObject mJsonObject = mArray.getJSONObject(i);
+                new_date = mJsonObject.getString("date");
+                new_month = getMonth(new_date);
+
+                if(i == 0){
+                values.add(mJsonObject.getString("open_today"));
+                date = mJsonObject.getString("date");
+                month = getMonth(date);
+                }
+
+                else{
+                    if(new_month.equals(month)){
+                       continue;
+                    }
+                    else{
+                        values.add(mJsonObject.getString("open_today"));
+                        date = mJsonObject.getString("date");
+                        month = getMonth(date);
+                    }
+
+                }
+            }
+        }
+
+            catch(JSONException e){
+                e.printStackTrace();
+            }
+        return values;
+        }
+
+        public String getMonth(String date){
+
+            String [] dateParts = date.split("-");
+            return dateParts[1];
+
+        }
+
+
+}
